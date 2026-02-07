@@ -1,3 +1,9 @@
+variable "incus_project" {
+  description = "Incus project to deploy resources in"
+  type        = string
+  default     = "default"
+}
+
 variable "container_name" {
   description = "Name of the Asterisk container"
   type        = string
@@ -5,15 +11,15 @@ variable "container_name" {
 }
 
 variable "docker_image" {
-  description = "Docker image for Asterisk (use local cached image)"
+  description = "Docker image for Asterisk"
   type        = string
-  default     = "asterisk-latest"
+  default     = "oci-docker:andrius/asterisk:latest"
 }
 
 variable "nginx_image" {
-  description = "Docker image for Nginx provisioning server (use local cached image)"
+  description = "Docker image for Nginx provisioning server"
   type        = string
-  default     = "nginx-alpine"
+  default     = "oci-docker:nginx:alpine"
 }
 
 variable "provisioning_ip" {

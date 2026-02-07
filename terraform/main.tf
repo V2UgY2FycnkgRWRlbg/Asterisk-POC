@@ -11,6 +11,9 @@ terraform {
 provider "incus" {
   # Uses local Incus socket by default
   # For remote: set address, port, and credentials
+
+  # Use specified project (configurable via variable)
+  project = var.incus_project
 }
 
 # Create a storage volume for Asterisk data persistence

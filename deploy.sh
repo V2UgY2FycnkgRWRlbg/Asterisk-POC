@@ -57,55 +57,98 @@ if ! command -v tofu &> /dev/null; then
     fi
 fi
 
+# Check if Docker remote is configured
+if ! incus remote list | grep -q "oci-docker"; then
+    echo "⚠️  Docker remote (oci-docker) not configured"
+    echo "Adding Docker remote..."
+    incus remote add oci-docker https://docker.io --protocol=oci --public
+    echo "✓ Docker remote added"
+fi
+
 echo "✓ Prerequisites OK"
 echo ""
 
-# Check Docker remote
-echo "[2/4] Checking Docker remote..."
+# Check for terraform.tfvars
+echo "[2/4] Checking configuration..."
 
 cd terraform
 
-# Check if Docker remote is available
-if ! incus remote list | grep -q "oci-docker"; then
-    echo "Warning: oci-docker remote not found"
-    echo "Adding Docker remote..."
-    incus remote add oci-docker https://docker.io --protocol=oci --public
+# Always recreate terraform.tfvars to avoid duplicates
+if [ -f "terraform.tfvars" ]; then
+    echo "Removing old terraform.tfvars..."
+    rm terraform.tfvars
 fi
 
-echo "✓ Docker remote configured"
+echo "Creating terraform.tfvars from example..."
+cp terraform.tfvars.example terraform.tfvars
+
+# Ask about Incus project
 echo ""
-
-# Pre-pull Docker images to avoid timeout issues
-echo "[3/4] Pre-pulling Docker images (this may take a few minutes)..."
+echo "========================================="
+echo "Incus Project Configuration"
+echo "========================================="
 echo ""
-
-echo "→ Pulling Asterisk image (andrius/asterisk:latest)..."
-echo "  Using optimized production-ready Asterisk image"
-echo "  This may take 2-5 minutes depending on your connection..."
-incus image copy oci-docker:andrius/asterisk:latest local: --alias asterisk-latest 2>/dev/null || {
-    echo "  ℹ️  Image already exists or will be pulled during deployment"
-}
-
+echo "Available Incus projects:"
+incus project list -c n -f compact
 echo ""
-echo "→ Pulling Nginx image (nginx:alpine)..."
-incus image copy oci-docker:nginx:alpine local: --alias nginx-alpine 2>/dev/null || {
-    echo "  ℹ️  Image already exists or will be pulled during deployment"
-}
-
+echo "Which Incus project do you want to use?"
 echo ""
-echo "✓ Images ready"
-echo ""
+read -p "Project name [default: default]: " INCUS_PROJECT
+INCUS_PROJECT=${INCUS_PROJECT:-default}
 
-# Check for terraform.tfvars
-echo "[4/5] Checking configuration..."
-
-if [ ! -f "terraform.tfvars" ]; then
-    echo "Creating terraform.tfvars from example..."
-    cp terraform.tfvars.example terraform.tfvars
+# Validate project exists
+if ! incus project list -c n -f compact | grep -q "^${INCUS_PROJECT}$"; then
+    echo ""
+    echo "⚠️  Project '${INCUS_PROJECT}' does not exist."
+    read -p "Create it now? (yes/no): " CREATE_PROJECT
+    if [ "$CREATE_PROJECT" = "yes" ]; then
+        incus project create "${INCUS_PROJECT}"
+        echo "✓ Project '${INCUS_PROJECT}' created"
+    else
+        echo "Error: Project '${INCUS_PROJECT}' does not exist. Aborting."
+        exit 1
+    fi
 fi
+
+echo "✓ Using project: ${INCUS_PROJECT}"
+
+# Add project to terraform.tfvars
+echo "incus_project = \"${INCUS_PROJECT}\"" >> terraform.tfvars
+echo ""
+
+# Pre-pull Docker images to the selected project
+echo "========================================="
+echo "Docker Images"
+echo "========================================="
+echo ""
+
+# Check and pull Asterisk image
+if incus image list --project="${INCUS_PROJECT}" | grep -q "asterisk-latest"; then
+    echo "→ Asterisk image already cached in project '${INCUS_PROJECT}'"
+else
+    echo "→ Pulling Asterisk image (andrius/asterisk:latest)..."
+    echo "  Using optimized production-ready Asterisk image"
+    echo "  This may take 2-5 minutes depending on your connection..."
+    incus image copy oci-docker:andrius/asterisk:latest local: --project="${INCUS_PROJECT}" --alias asterisk-latest
+    echo "  ✓ Asterisk image pulled successfully"
+fi
+
+echo ""
+
+# Check and pull Nginx image
+if incus image list --project="${INCUS_PROJECT}" | grep -q "nginx-alpine"; then
+    echo "→ Nginx image already cached in project '${INCUS_PROJECT}'"
+else
+    echo "→ Pulling Nginx image (nginx:alpine)..."
+    incus image copy oci-docker:nginx:alpine local: --project="${INCUS_PROJECT}" --alias nginx-alpine
+    echo "  ✓ Nginx image pulled successfully"
+fi
+
+echo ""
+echo "✓ Images ready in project '${INCUS_PROJECT}'"
+echo ""
 
 # Ask about test VMs
-echo ""
 echo "========================================="
 echo "Test Client VMs Configuration"
 echo "========================================="
@@ -128,6 +171,7 @@ echo ""
 read -p "Deploy test VMs? (yes/no) [default: yes]: " DEPLOY_VMS
 DEPLOY_VMS=${DEPLOY_VMS:-yes}
 
+# Add the setting to terraform.tfvars
 if [ "$DEPLOY_VMS" = "yes" ]; then
     echo "enable_test_vms = true" >> terraform.tfvars
     echo "✓ Test VMs will be deployed"
@@ -141,7 +185,7 @@ echo "✓ Configuration ready"
 echo ""
 
 # Initialize Terraform
-echo "[5/5] Initializing and deploying..."
+echo "[3/4] Initializing and deploying..."
 echo ""
 
 # Initialize if needed
