@@ -1,0 +1,180 @@
+# ============================================================================
+# Asterisk POC - GitIgnore
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Terraform - État et fichiers sensibles
+# ----------------------------------------------------------------------------
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# ----------------------------------------------------------------------------
+# Asterisk - Fichiers sensibles et logs
+# ----------------------------------------------------------------------------
+# Mots de passe et secrets
+asterisk/pjsip.conf.secret
+asterisk/voicemail.conf.secret
+asterisk/*.key
+asterisk/*.pem
+asterisk/*.crt
+asterisk/keys/
+
+# Logs Asterisk
+asterisk/logs/
+*.log
+
+# Fichiers de runtime Asterisk
+asterisk/astdb
+asterisk/astdb.sqlite3
+asterisk/*.db
+
+# Voicemail recordings (peuvent contenir des données sensibles)
+asterisk/voicemail/
+asterisk/spool/
+
+# CDR (Call Detail Records - données sensibles)
+asterisk/cdr-csv/
+asterisk/cdr-custom/
+
+# ----------------------------------------------------------------------------
+# Provisioning - Fichiers générés
+# ----------------------------------------------------------------------------
+# Fichiers de config générés pour téléphones spécifiques
+asterisk/provisioning/*.cfg
+asterisk/provisioning/*.xml
+asterisk/provisioning/SEP*.cnf.xml
+asterisk/provisioning/y*.cfg
+asterisk/provisioning/cfg*.xml
+# Garder les templates et index.html
+!asterisk/provisioning/index.html
+!asterisk/provisioning/README.md
+
+# ----------------------------------------------------------------------------
+# Credentials et secrets
+# ----------------------------------------------------------------------------
+# Fichiers contenant des credentials
+*credentials*
+*secrets*
+*.secret
+.env
+.env.*
+!.env.example
+
+# Fichiers de backup avec potentiellement des mots de passe
+*.bak
+*.backup
+*.old
+
+# ----------------------------------------------------------------------------
+# Incus/LXD
+# ----------------------------------------------------------------------------
+# Pas de fichiers Incus à ignorer normalement, mais au cas où:
+*.incus
+
+# ----------------------------------------------------------------------------
+# Système d'exploitation
+# ----------------------------------------------------------------------------
+# Linux
+*~
+.directory
+.Trash-*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ----------------------------------------------------------------------------
+# Éditeurs et IDEs
+# ----------------------------------------------------------------------------
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains (IntelliJ, PyCharm, etc.)
+.idea/
+*.iml
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+.*.sw?
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ----------------------------------------------------------------------------
+# Développement
+# ----------------------------------------------------------------------------
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ----------------------------------------------------------------------------
+# Fichiers temporaires
+# ----------------------------------------------------------------------------
+*.tmp
+*.temp
+tmp/
+temp/
+.cache/
+
+# ----------------------------------------------------------------------------
+# Archives et builds
+# ----------------------------------------------------------------------------
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.rar
+*.7z
+
+# ----------------------------------------------------------------------------
+# Documentation - GARDER LA DOC!
+# ----------------------------------------------------------------------------
+# On garde tous les fichiers markdown
+!*.md
+!docs/*.md
+!README.md
+
