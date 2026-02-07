@@ -96,8 +96,8 @@ echo ""
 read -p "Project name [default: default]: " INCUS_PROJECT
 INCUS_PROJECT=${INCUS_PROJECT:-default}
 
-# Validate project exists
-if ! incus project list -c n -f compact | grep -q "^${INCUS_PROJECT}$"; then
+# Validate project exists (check if project is in the list, ignoring whitespace)
+if ! incus project list -c n -f compact | tr -d ' ' | grep -q "^${INCUS_PROJECT}$"; then
     echo ""
     echo "⚠️  Project '${INCUS_PROJECT}' does not exist."
     read -p "Create it now? (yes/no): " CREATE_PROJECT
