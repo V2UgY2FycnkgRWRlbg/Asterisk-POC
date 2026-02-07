@@ -111,10 +111,10 @@ if ! incus project list -c n -f compact | tr -d ' ' | grep -q "^${INCUS_PROJECT}
 fi
 
 echo "✓ Using project: ${INCUS_PROJECT}"
-
-# Add project to terraform.tfvars
-echo "incus_project = \"${INCUS_PROJECT}\"" >> terraform.tfvars
 echo ""
+
+# Add project to terraform.tfvars (at the beginning for clarity)
+sed -i "s|^# incus_project = \"default\"|incus_project = \"${INCUS_PROJECT}\"|" terraform.tfvars
 
 # Pre-pull Docker images to the selected project
 echo "========================================="
@@ -171,12 +171,12 @@ echo ""
 read -p "Deploy test VMs? (yes/no) [default: yes]: " DEPLOY_VMS
 DEPLOY_VMS=${DEPLOY_VMS:-yes}
 
-# Add the setting to terraform.tfvars
+# Add the setting to terraform.tfvars (uncomment the line)
 if [ "$DEPLOY_VMS" = "yes" ]; then
-    echo "enable_test_vms = true" >> terraform.tfvars
+    sed -i "s|^# enable_test_vms = true|enable_test_vms = true|" terraform.tfvars
     echo "✓ Test VMs will be deployed"
 else
-    echo "enable_test_vms = false" >> terraform.tfvars
+    sed -i "s|^# enable_test_vms = true|enable_test_vms = false|" terraform.tfvars
     echo "✓ Test VMs will NOT be deployed"
 fi
 
@@ -186,6 +186,17 @@ echo ""
 
 # Initialize Terraform
 echo "[3/4] Initializing and deploying..."
+echo ""
+
+# Verify terraform.tfvars has the correct project
+echo "Verifying configuration..."
+if grep -q "^incus_project = \"${INCUS_PROJECT}\"" terraform.tfvars; then
+    echo "✓ Incus project correctly set to: ${INCUS_PROJECT}"
+else
+    echo "⚠️  Warning: incus_project not found in terraform.tfvars"
+    echo "   Adding it now..."
+    echo "incus_project = \"${INCUS_PROJECT}\"" >> terraform.tfvars
+fi
 echo ""
 
 # Initialize if needed
@@ -222,16 +233,20 @@ echo "========================================="
 echo "Deployment Complete!"
 echo "========================================="
 echo ""
+echo "📦 Incus Project: ${INCUS_PROJECT}"
+echo ""
 
 # Show outputs
 tofu output
 
 echo ""
 echo "Next steps:"
-echo "  1. Test with 2 softphones - see ../TEST_CREDENTIALS.md"
-echo "  2. Set up SIP trunk for external calls - see ../docs/SIP_TRUNK_SETUP.md"
-echo "  3. Add more users - see ../docs/SOFTPHONE_SETUP.md"
-echo "  4. Connect to Asterisk: incus exec asterisk-server -- asterisk -rvvv"
+echo "  1. Switch to project: incus project switch ${INCUS_PROJECT}"
+echo "  2. List instances: incus ls"
+echo "  3. Test with 2 softphones - see ../TEST_CREDENTIALS.md"
+echo "  4. Set up SIP trunk for external calls - see ../docs/SIP_TRUNK_SETUP.md"
+echo "  5. Add more users - see ../docs/SOFTPHONE_SETUP.md"
+echo "  6. Connect to Asterisk: incus exec asterisk-server --project=${INCUS_PROJECT} -- asterisk -rvvv"
 echo ""
 echo "Documentation:"
 echo "  - Test Credentials: ../TEST_CREDENTIALS.md"
