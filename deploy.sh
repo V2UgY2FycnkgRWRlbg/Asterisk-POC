@@ -96,8 +96,8 @@ echo ""
 read -p "Project name [default: default]: " INCUS_PROJECT
 INCUS_PROJECT=${INCUS_PROJECT:-default}
 
-# Validate project exists (check if project is in the list, ignoring whitespace)
-if ! incus project list -c n -f compact | tr -d ' ' | grep -q "^${INCUS_PROJECT}$"; then
+# Validate project exists (extract just the project name, ignoring (current) marker)
+if ! incus project list -c n -f compact | awk '{print $1}' | grep -q "^${INCUS_PROJECT}$"; then
     echo ""
     echo "⚠️  Project '${INCUS_PROJECT}' does not exist."
     read -p "Create it now? (yes/no): " CREATE_PROJECT
@@ -113,39 +113,155 @@ fi
 echo "✓ Using project: ${INCUS_PROJECT}"
 echo ""
 
+# Check if resources already exist in this project
+echo "Checking for existing resources in project '${INCUS_PROJECT}'..."
+
+# Check for instances
+EXISTING_INSTANCES=$(incus list --project="${INCUS_PROJECT}" -c n -f compact 2>/dev/null | grep -E "^asterisk-" | wc -l)
+# Check for network
+EXISTING_NETWORK=$(incus network list --project="${INCUS_PROJECT}" -c n -f compact 2>/dev/null | grep -c "^asterisk-net$" || echo 0)
+# Check for storage
+EXISTING_STORAGE=$(incus storage list --project="${INCUS_PROJECT}" -c n -f compact 2>/dev/null | grep -c "^asterisk-storage$" || echo 0)
+
+TOTAL_EXISTING=$((EXISTING_INSTANCES + EXISTING_NETWORK + EXISTING_STORAGE))
+
+if [ "$TOTAL_EXISTING" -gt 0 ]; then
+    echo ""
+    echo "⚠️  Found existing Asterisk resources in project '${INCUS_PROJECT}':"
+
+    if [ "$EXISTING_INSTANCES" -gt 0 ]; then
+        echo ""
+        echo "Instances:"
+        incus list --project="${INCUS_PROJECT}" -c n -f compact 2>/dev/null | grep "^asterisk-" | sed 's/^/  - /'
+    fi
+
+    if [ "$EXISTING_NETWORK" -gt 0 ]; then
+        echo ""
+        echo "Network:"
+        echo "  - asterisk-net"
+    fi
+
+    if [ "$EXISTING_STORAGE" -gt 0 ]; then
+        echo ""
+        echo "Storage:"
+        echo "  - asterisk-storage"
+    fi
+
+    echo ""
+    echo "Options:"
+    echo "  1. Delete ALL existing resources and redeploy (RECOMMENDED - clean slate)"
+    echo "  2. Cancel deployment"
+    echo ""
+    read -p "Choose option (1/2) [default: 1]: " CLEANUP_OPTION
+    CLEANUP_OPTION=${CLEANUP_OPTION:-1}
+
+    case $CLEANUP_OPTION in
+        1)
+            echo ""
+            echo "🗑️  Deleting existing resources..."
+
+            # Delete instances first (they depend on network and storage)
+            if [ "$EXISTING_INSTANCES" -gt 0 ]; then
+                echo ""
+                echo "Deleting instances..."
+                incus list --project="${INCUS_PROJECT}" -c n -f compact 2>/dev/null | grep "^asterisk-" | while read instance; do
+                    if [ -n "$instance" ]; then
+                        echo "  → Deleting: $instance"
+                        if incus delete "$instance" --force --project="${INCUS_PROJECT}"; then
+                            echo "    ✓ Deleted successfully"
+                        else
+                            echo "    ⚠️  Failed to delete (may not exist or be in use)"
+                        fi
+                    fi
+                done
+                # Wait a bit for instances to be fully deleted
+                echo "  Waiting for instances to be fully removed..."
+                sleep 3
+            fi
+
+            # Delete network
+            if [ "$EXISTING_NETWORK" -gt 0 ]; then
+                echo ""
+                echo "Deleting network..."
+                echo "  → Deleting: asterisk-net"
+                if incus network delete asterisk-net --project="${INCUS_PROJECT}"; then
+                    echo "    ✓ Network deleted successfully"
+                else
+                    echo "    ⚠️  Failed to delete network"
+                    echo "    You may need to delete it manually: incus network delete asterisk-net --project=${INCUS_PROJECT}"
+                fi
+                sleep 1
+            fi
+
+            # Delete storage pool
+            if [ "$EXISTING_STORAGE" -gt 0 ]; then
+                echo ""
+                echo "Deleting storage pool..."
+                echo "  → Deleting: asterisk-storage"
+                if incus storage delete asterisk-storage --project="${INCUS_PROJECT}"; then
+                    echo "    ✓ Storage pool deleted successfully"
+                else
+                    echo "    ⚠️  Failed to delete storage pool"
+                    echo "    You may need to delete it manually: incus storage delete asterisk-storage --project=${INCUS_PROJECT}"
+                fi
+                sleep 1
+            fi
+
+            # Verify cleanup
+            echo ""
+            echo "Verifying cleanup..."
+            REMAINING_INSTANCES=$(incus list --project="${INCUS_PROJECT}" -c n -f compact 2>/dev/null | grep -c "^asterisk-" || echo 0)
+            REMAINING_NETWORK=$(incus network list --project="${INCUS_PROJECT}" -c n -f compact 2>/dev/null | grep -c "^asterisk-net$" || echo 0)
+            REMAINING_STORAGE=$(incus storage list --project="${INCUS_PROJECT}" -c n -f compact 2>/dev/null | grep -c "^asterisk-storage$" || echo 0)
+
+            if [ "$REMAINING_INSTANCES" -gt 0 ] || [ "$REMAINING_NETWORK" -gt 0 ] || [ "$REMAINING_STORAGE" -gt 0 ]; then
+                echo "⚠️  Warning: Some resources could not be deleted:"
+                [ "$REMAINING_INSTANCES" -gt 0 ] && echo "  - $REMAINING_INSTANCES instance(s) still exist"
+                [ "$REMAINING_NETWORK" -gt 0 ] && echo "  - Network 'asterisk-net' still exists"
+                [ "$REMAINING_STORAGE" -gt 0 ] && echo "  - Storage pool 'asterisk-storage' still exists"
+                echo ""
+                read -p "Continue anyway? (yes/no): " CONTINUE_ANYWAY
+                if [ "$CONTINUE_ANYWAY" != "yes" ]; then
+                    echo "Deployment cancelled. Please clean up manually."
+                    exit 1
+                fi
+            else
+                echo "✓ All resources successfully removed"
+            fi
+
+            echo ""
+            echo "✓ Cleanup complete"
+            echo ""
+            ;;
+        2)
+            echo ""
+            echo "Deployment cancelled."
+            exit 0
+            ;;
+        *)
+            echo ""
+            echo "Invalid option. Deployment cancelled."
+            exit 1
+            ;;
+    esac
+else
+    echo "✓ No existing resources found"
+    echo ""
+fi
+
 # Add project to terraform.tfvars (at the beginning for clarity)
 sed -i "s|^# incus_project = \"default\"|incus_project = \"${INCUS_PROJECT}\"|" terraform.tfvars
 
-# Pre-pull Docker images to the selected project
+# Note about Docker images
 echo "========================================="
 echo "Docker Images"
 echo "========================================="
 echo ""
-
-# Check and pull Asterisk image
-if incus image list --project="${INCUS_PROJECT}" | grep -q "asterisk-latest"; then
-    echo "→ Asterisk image already cached in project '${INCUS_PROJECT}'"
-else
-    echo "→ Pulling Asterisk image (andrius/asterisk:latest)..."
-    echo "  Using optimized production-ready Asterisk image"
-    echo "  This may take 2-5 minutes depending on your connection..."
-    incus image copy oci-docker:andrius/asterisk:latest local: --project="${INCUS_PROJECT}" --alias asterisk-latest
-    echo "  ✓ Asterisk image pulled successfully"
-fi
-
+echo "ℹ️  Docker images will be pulled automatically by Incus during deployment"
+echo "   - andrius/asterisk:latest (production-optimized, ~122MB)"
+echo "   - nginx:alpine (lightweight web server, ~25MB)"
 echo ""
-
-# Check and pull Nginx image
-if incus image list --project="${INCUS_PROJECT}" | grep -q "nginx-alpine"; then
-    echo "→ Nginx image already cached in project '${INCUS_PROJECT}'"
-else
-    echo "→ Pulling Nginx image (nginx:alpine)..."
-    incus image copy oci-docker:nginx:alpine local: --project="${INCUS_PROJECT}" --alias nginx-alpine
-    echo "  ✓ Nginx image pulled successfully"
-fi
-
-echo ""
-echo "✓ Images ready in project '${INCUS_PROJECT}'"
+echo "✓ Images will be fetched on-demand from Docker Hub"
 echo ""
 
 # Ask about test VMs

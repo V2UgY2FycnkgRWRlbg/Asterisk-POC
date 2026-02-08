@@ -1,5 +1,8 @@
-# Asterisk POC Configuration
-# Customize these values for your deployment
+# Asterisk POC Configuration Example
+# Copy this to terraform.tfvars and customize
+
+# Incus project (set by deploy.sh)
+incus_project = "asterisk-poc"
 
 container_name    = "asterisk-server"
 cpu_limit         = "4"
@@ -14,4 +17,6 @@ provisioning_port = 80
 domain            = "asterisk.local"
 admin_email       = "admin@company.local"
 
+# Test VMs (set by deploy.sh)
 enable_test_vms = true
+

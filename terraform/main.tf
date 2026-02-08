@@ -18,20 +18,22 @@ provider "incus" {
 
 # Create a storage volume for Asterisk data persistence
 resource "incus_storage_pool" "asterisk_pool" {
-  name   = "asterisk-storage"
-  driver = "dir"
+  name    = "asterisk-storage"
+  driver  = "dir"
+  project = var.incus_project
   # Don't specify source - let Incus create it automatically
 }
 
 # Create a network profile for Asterisk
 resource "incus_network" "asterisk_network" {
-  name = "asterisk-net"
-  
+  name    = "asterisk-net"
+  project = var.incus_project
+
   config = {
     "ipv4.address" = var.network_subnet
     "ipv4.nat"     = "true"
     "ipv6.address" = "none"
-    
+
     # DNS settings
     "dns.domain" = "asterisk.local"
     "dns.mode"   = "managed"
@@ -40,10 +42,21 @@ resource "incus_network" "asterisk_network" {
 
 # Asterisk server container using official Docker image
 resource "incus_instance" "asterisk_server" {
-  name  = var.container_name
+  name    = var.container_name
+  project = var.incus_project
   # Use official Asterisk Docker image from Docker Hub
   image = var.docker_image
   type  = "container"
+
+  # Root disk
+  device {
+    name = "root"
+    type = "disk"
+    properties = {
+      pool = incus_storage_pool.asterisk_pool.name
+      path = "/"
+    }
+  }
 
   # Network configuration
   device {
@@ -86,9 +99,20 @@ resource "incus_instance" "asterisk_server" {
 
 # Nginx container for phone provisioning (using Docker image)
 resource "incus_instance" "provisioning_server" {
-  name  = "${var.container_name}-provisioning"
-  image = var.nginx_image
-  type  = "container"
+  name    = "${var.container_name}-provisioning"
+  project = var.incus_project
+  image   = var.nginx_image
+  type    = "container"
+
+  # Root disk
+  device {
+    name = "root"
+    type = "disk"
+    properties = {
+      pool = incus_storage_pool.asterisk_pool.name
+      path = "/"
+    }
+  }
 
   device {
     name = "eth0"
@@ -126,9 +150,20 @@ resource "incus_instance" "provisioning_server" {
 resource "incus_instance" "test_client_1" {
   count = var.enable_test_vms ? 1 : 0
 
-  name  = "asterisk-test-client-1"
-  image = var.test_vm_image
-  type  = "virtual-machine"
+  name    = "asterisk-test-client-1"
+  project = var.incus_project
+  image   = var.test_vm_image
+  type    = "virtual-machine"
+
+  # Root disk
+  device {
+    name = "root"
+    type = "disk"
+    properties = {
+      pool = incus_storage_pool.asterisk_pool.name
+      path = "/"
+    }
+  }
 
   device {
     name = "eth0"
@@ -248,9 +283,20 @@ resource "incus_instance" "test_client_1" {
 resource "incus_instance" "test_client_2" {
   count = var.enable_test_vms ? 1 : 0
 
-  name  = "asterisk-test-client-2"
-  image = var.test_vm_image
-  type  = "virtual-machine"
+  name    = "asterisk-test-client-2"
+  project = var.incus_project
+  image   = var.test_vm_image
+  type    = "virtual-machine"
+
+  # Root disk
+  device {
+    name = "root"
+    type = "disk"
+    properties = {
+      pool = incus_storage_pool.asterisk_pool.name
+      path = "/"
+    }
+  }
 
   device {
     name = "eth0"
